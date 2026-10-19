@@ -374,6 +374,9 @@ function renderMe() {
     <section><h3>Ma wishlist</h3>
       <div class="meta">${plural(state.mangas.filter(m => m.owner === state.me && m.wish).length, "manga", "mangas")} que tu aimerais avoir.</div>
       <div class="row"><button id="goWish">Voir ma wishlist</button><button id="coteBtn" class="primary">Vérifier un prix</button></div></section>
+    <section><h3>Couvertures</h3>
+      <div class="meta" id="coverCount">${plural(state.mangas.filter(m => mine(m) && !m.cover).length, "manga", "mangas")} sans couverture.</div>
+      <div class="row"><span class="spacer"></span><button id="coversBtn">Chercher les couvertures manquantes</button></div></section>
     <section><h3>Mot de passe</h3>
       <label>Nouveau mot de passe<input type="password" id="pPass" autocomplete="new-password"></label>
       <div class="row"><span class="spacer"></span><button id="pPassBtn">Changer le mot de passe</button></div></section>
@@ -390,6 +393,7 @@ function renderMe() {
   };
   $("#goWish").onclick = () => { state.viewing = state.me; state.tab = "Wishlist"; showApp(); };
   $("#coteBtn").onclick = () => openAdd("check");
+  $("#coversBtn").onclick = () => fillCovers(true);
   $("#pPassBtn").onclick = async () => {
     const pw = $("#pPass").value;
     if (pw.length < 8) return toast("Choisis au moins 8 caractères.");
@@ -507,6 +511,30 @@ function purchaseLine(m) {
   const p = m.purchase || {};
   const date = p.date ? " le " + new Date(p.date).toLocaleDateString("fr-FR") : "";
   return `Acheté ${euros(p.price)}${p.shop ? " (" + esc(p.shop) + ")" : ""}${date}`;
+}
+
+// ---------- Couvertures manquantes ----------
+// Au démarrage, on cherche une fois la couverture des tomes qui n'en ont pas ; le bouton de l'onglet Moi relance tout.
+let fillingCovers = false;
+async function fillCovers(force) {
+  if (fillingCovers || !navigator.onLine) return;
+  const todo = state.mangas.filter(m => mine(m) && !m.cover && m.isbn && (force || !m.coverTried));
+  if (!todo.length) { if (force) toast("Aucune couverture à chercher."); return; }
+  fillingCovers = true;
+  let found = 0;
+  if (force) toast(`Recherche de ${plural(todo.length, "couverture", "couvertures")}...`);
+  for (const m of todo) {
+    try {
+      const { cover } = await fn("cover", { isbn: m.isbn });
+      if (cover) { Object.assign(m, await fn("setCover", { mangaId: m.id, url: cover })); found++; }
+      else { m.coverTried = today(); await saveManga(m); }
+      saveCache();
+      if (state.tab !== "Moi") render();
+    } catch (e) { /* on passe au suivant */ }
+  }
+  fillingCovers = false;
+  if (state.tab === "Moi") render();
+  if (force || found) toast(`${plural(found, "couverture ajoutée", "couvertures ajoutées")} sur ${todo.length}.`);
 }
 
 // ---------- Prix ----------
@@ -630,7 +658,7 @@ function openAdd(mode) {
     <div class="row">${mode !== "check" ? '<button id="manualBtn">Saisir à la main</button>' : ""}<span class="spacer"></span><button id="closeBtn">Fermer</button></div>
     <div id="manual"></div>`;
   $("#closeBtn").onclick = () => { stopScan(); $("#dlg").close(); };
-  if ($("#manualBtn")) $("#manualBtn").onclick = () => showManualForm(M.wish, {});
+  if ($("#manualBtn")) $("#manualBtn").onclick = () => showManualForm(M.wish, {}, m => remember(m));
 
   const startScan = async () => {
     $("#dRes").innerHTML = ""; $("#manual").innerHTML = "";
@@ -640,6 +668,11 @@ function openAdd(mode) {
       $("#dq").value = code; go(true);
     } catch (e) { toast(e.message); }
   };
+  // Dernier tome ajouté : sert à pré-remplir un tome absent du catalogue (le suivant de la série).
+  let lastAdded = null;
+  const remember = m => { if (m && m.series) lastAdded = m; return m; };
+  const nextFrom = r => r && r.series ? { series: r.series, authors: r.authors, publisher: r.publisher,
+    tome: r.tome != null ? r.tome + 1 : null } : {};
   const nextButton = msg => {
     $("#dRes").innerHTML = `<div class="done"><span>${msg}</span><button id="nextScan" class="primary">Scanner le suivant</button></div>`;
     $("#dq").value = "";
@@ -658,19 +691,21 @@ function openAdd(mode) {
     const r = await fn("isbn", { isbn });
     if (r.notFound) {
       if (mode === "check") return showCheck(Object.assign({ series: local ? local.series : "" }, r), owner);
-      $("#dRes").innerHTML = `<div class="note">L’ISBN ${esc(isbn)} est inconnu du catalogue. Saisis ce manga à la main ci-dessous.</div>`;
-      return showManualForm(M.wish, { isbn, cover: r.cover });
+      $("#dRes").innerHTML = `<div class="note">Ce tome n’est pas encore dans le catalogue de la BnF (c’est souvent le cas des tomes très récents).
+        ${lastAdded ? "Vérifie les informations ci-dessous, puis touche « Ajouter »." : "Complète les informations ci-dessous, puis touche « Ajouter »."}</div>`;
+      return showManualForm(M.wish, Object.assign(nextFrom(lastAdded), { isbn, cover: r.cover }),
+        m => { remember(m); if (scanned) nextButton(`« ${esc(fullName(m))} » ajouté${M.wish ? " à ta wishlist" : ""}.`); });
     }
     if (mode === "check") return showCheck(r, owner);
     if (scanned) {
       // Saisie en série : ajout direct, puis on propose tout de suite le tome suivant.
       $("#dRes").innerHTML = resLine(r);
-      const ok = await addManga(Object.assign({ wish: M.wish }, r));
+      const ok = remember(await addManga(Object.assign({ wish: M.wish }, r)));
       if (ok) nextButton(`« ${esc(fullName(r))} » ajouté${M.wish ? " à ta wishlist" : ""}.`);
       return;
     }
     $("#dRes").innerHTML = resLine(r, `<button id="addOne">${M.button}</button>`);
-    $("#addOne").onclick = e => addManga(Object.assign({ wish: M.wish }, r), e.target);
+    $("#addOne").onclick = async e => remember(await addManga(Object.assign({ wish: M.wish }, r), e.target));
   };
 
   const go = async scanned => {
@@ -680,11 +715,21 @@ function openAdd(mode) {
       if (isIsbn(q)) return await handleIsbn(isbn13(q), scanned === true);
       $("#dRes").innerHTML = '<div class="meta">Recherche dans le catalogue de la BnF...</div>';
       const res = await fn("search", { q });
-      if (!res.length) { $("#dRes").innerHTML = '<div class="meta">Aucun manga trouvé. Essaie d’autres mots, ou scanne le code-barres.</div>'; return; }
-      $("#dRes").innerHTML = res.map((r, i) => {
+      const wanted = (q.match(/(\d+)\s*$/) || [])[1];
+      // Tome absent : le suivant du dernier tome connu, ou le numéro tapé.
+      const lastKnown = res.length ? res.filter(r => key(r.series) === key(res[res.length - 1].series)).pop() : null;
+      const absent = mode === "check" ? "" : `<div class="done"><span>Un tome n’est pas dans la liste (tome trop récent) ?</span><button id="absentBtn">L’ajouter</button></div>`;
+      if (!res.length) { $("#dRes").innerHTML = '<div class="meta">Aucun manga trouvé dans le catalogue. Essaie d’autres mots, ou scanne le code-barres.</div>' + absent; }
+      else $("#dRes").innerHTML = res.map((r, i) => {
         const has = state.mangas.some(m => m.owner === owner && m.isbn === r.isbn && !m.wish);
         return resLine(r, has && mode !== "check" ? '<span class="meta" style="margin:0">déjà là</span>' : `<button data-i="${i}">${M.button}</button>`);
-      }).join("");
+      }).join("") + absent;
+      if ($("#absentBtn")) $("#absentBtn").onclick = () => {
+        const pre = lastKnown ? nextFrom(lastKnown) : { series: q.replace(/\s*(?:t(?:ome)?\.?\s*)?\d+\s*$/i, "") };
+        if (wanted) pre.tome = Number(wanted);
+        showManualForm(M.wish, pre, remember);
+        $("#manual").scrollIntoView({ behavior: "smooth" });
+      };
       $("#dRes").querySelectorAll("button[data-i]").forEach(b => b.onclick = async () => {
         const r = res[b.dataset.i];
         if (mode === "check") {
@@ -694,7 +739,7 @@ function openAdd(mode) {
         }
         b.disabled = true; b.textContent = "Ajout...";
         try { r.cover = r.cover || (await fn("cover", { isbn: r.isbn })).cover; } catch (e) {}
-        addManga(Object.assign({ wish: M.wish }, r), b);
+        remember(await addManga(Object.assign({ wish: M.wish }, r), b));
       });
     } catch (e) { $("#dRes").innerHTML = `<div class="note">${esc(e.message)}</div>`; }
   };
@@ -728,22 +773,25 @@ function showCheck(r, owner) {
   if ($("#collAdd")) $("#collAdd").onclick = e => addManga(Object.assign({}, r, { wish: false }), e.target);
 }
 
-function showManualForm(wish, pre) {
+function showManualForm(wish, pre, onDone) {
+  const v = k => esc(pre[k] ?? "");
   $("#manual").innerHTML = `
-    <label>Série<input type="text" id="mSeries"></label>
-    <label>Tome<input type="text" id="mTome" inputmode="numeric"></label>
+    ${pre.cover ? `<div class="res" style="margin-top:12px"><img src="${esc(pre.cover)}" alt=""><div class="info"><span>Couverture trouvée pour cet ISBN.</span></div></div>` : ""}
+    <label>Série<input type="text" id="mSeries" value="${v("series")}"></label>
+    <label>Tome<input type="text" id="mTome" inputmode="numeric" value="${v("tome")}"></label>
     <label>Titre du tome (facultatif)<input type="text" id="mTitle"></label>
-    <label>Auteur(s)<input type="text" id="mAuthors"></label>
-    <label>Éditeur<input type="text" id="mPublisher" placeholder="Glénat, Kana, Pika, Ki-oon..."></label>
-    <label>ISBN<input type="text" id="mIsbn" inputmode="numeric" value="${esc(pre.isbn || "")}"></label>
+    <label>Auteur(s)<input type="text" id="mAuthors" value="${v("authors")}"></label>
+    <label>Éditeur<input type="text" id="mPublisher" placeholder="Glénat, Kana, Pika, Ki-oon..." value="${v("publisher")}"></label>
+    <label>ISBN<input type="text" id="mIsbn" inputmode="numeric" value="${v("isbn")}"></label>
     <div class="row"><span class="spacer"></span><button id="mAdd" class="primary">Ajouter</button></div>`;
-  $("#mAdd").onclick = e => {
+  $("#mAdd").onclick = async e => {
     const tome = parseInt($("#mTome").value, 10);
-    addManga({ series: $("#mSeries").value.trim(), tome: isNaN(tome) ? null : tome, title: $("#mTitle").value.trim(),
+    const m = await addManga({ series: $("#mSeries").value.trim(), tome: isNaN(tome) ? null : tome, title: $("#mTitle").value.trim(),
       authors: $("#mAuthors").value.trim(), publisher: $("#mPublisher").value.trim(),
       isbn: $("#mIsbn").value.trim() ? isbn13($("#mIsbn").value) : "", cover: pre.cover || null, wish }, e.target);
+    if (m && onDone) onDone(m);
   };
-  $("#mSeries").focus();
+  if (!pre.series) $("#mSeries").focus();
 }
 
 async function addManga(item, btn) {
@@ -753,6 +801,7 @@ async function addManga(item, btn) {
   try {
     // Déjà dans la wishlist : on le passe simplement dans la collection.
     const wished = !item.wish && item.isbn && state.mangas.find(m => mine(m) && m.wish && m.isbn === item.isbn);
+    let added = wished;
     if (wished) {
       wished.wish = false; wished.added = today();
       await saveManga(wished);
@@ -766,14 +815,14 @@ async function addManga(item, btn) {
       };
       const { error } = await db.from("mangas").insert({ id: m.id, owner: m.owner, data: mangaData(m) });
       if (error) throw new Error(error.message);
-      state.mangas.push(m);
+      state.mangas.push(m); added = m;
       if (item.cover) { try { Object.assign(m, await fn("setCover", { mangaId: m.id, url: item.cover })); } catch (e) {} }
       saveCache();
     }
     render();
     if (btn) btn.textContent = "Ajouté";
     toast(`« ${fullName(item)} » ajouté ${item.wish ? "à ta wishlist" : "à ta collection"}.`);
-    return true;
+    return added;
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = label; }
     toast(e.message); return false;
@@ -835,6 +884,7 @@ async function start() {
   }
   if (!state.profiles.some(p => p.id === state.viewing)) state.viewing = state.me;
   showApp();
+  fillCovers(false);
 }
 
 function savePrefs() { store.set("prefs", Object.assign(store.get("prefs") || {}, { tab: state.tab, sort: state.sort, viewing: state.viewing })); }

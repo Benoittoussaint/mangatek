@@ -1,4 +1,5 @@
 // Mangatek : fonction Supabase qui interroge la BnF (et Open Library en secours) pour l'application.
+// Couvertures : AbeBooks (par ISBN-13, y compris les ISBN en 979), Amazon, puis Open Library.
 // Aucune clé nécessaire : le catalogue de la BnF est en accès libre.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -8,7 +9,7 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const COVER_HOSTS = ["amazon.com", "openlibrary.org"];
+const COVER_HOSTS = ["abebooks.com", "amazon.com", "openlibrary.org"];
 // Clé d'administration : ancienne variable (SUPABASE_SERVICE_ROLE_KEY) ou nouvelles clés (SUPABASE_SECRET_KEYS).
 function serviceKey(): string {
   const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -107,9 +108,10 @@ async function bnf(query: string, max = 20) {
   return [...xml.matchAll(/<mxc:record[\s\S]*?<\/mxc:record>/g)].map((m) => parseRecord(m[0]));
 }
 
-// Couverture : Amazon (par ISBN-10) donne de bonnes images, Open Library en secours.
+// Couverture : AbeBooks (tous les ISBN), Amazon (ISBN-10 seulement), Open Library en secours.
 async function findCover(i13: string) {
   const urls = [
+    `https://pictures.abebooks.com/isbn/${i13}-us-300.jpg`,
     isbn10(i13) && `https://images-na.ssl-images-amazon.com/images/P/${isbn10(i13)}.01.LZZZZZZZ.jpg`,
     `https://covers.openlibrary.org/b/isbn/${i13}-L.jpg?default=false`,
   ].filter(Boolean) as string[];
@@ -142,17 +144,22 @@ async function byIsbn(raw: string) {
   return found ? { ...found, isbn: i13, cover } : { isbn: i13, notFound: true, cover };
 }
 
+const plain = (s: string) => (s || "").normalize("NFKD").replace(/[^\w\s]/g, " ").toLowerCase();
+
+// Recherche par titre : toute la série (jusqu'à 200 notices), sans les disques ni les livres d'un autre titre.
 async function search(q: string) {
   q = q.replace(/["\\]/g, " ").trim();
   if (!q) return [];
   const m = q.match(/^(.*?)\s*(?:t(?:ome)?\.?\s*)?(\d+)$/i);
-  const recs = await bnf(`bib.title all "${q}"`, 30);
-  let res = recs.filter((r) => r.isbn.length === 13 && r.series);
-  if (!res.length && m) res = (await bnf(`bib.title all "${m[1]}"`, 30)).filter((r) => r.isbn.length === 13 && r.series);
+  const words = plain(m ? m[1] : q).split(/\s+/).filter(Boolean);
+  const keep = (r: any) => r.isbn.length === 13 && r.series && words.every((w) => plain(`${r.series} ${r.title}`).includes(w));
+  let res = (await bnf(`bib.title all "${q}"`, 50)).filter(keep);
+  if (m && !res.some((r) => r.tome === Number(m[2]))) res = (await bnf(`bib.title all "${m[1]}"`, 200)).filter(keep);
   // Doublons (même ISBN) écartés, puis tri par série et tome.
   res = res.filter((r, i) => res.findIndex((x) => x.isbn === r.isbn) === i);
-  res.sort((a, b) => a.series.localeCompare(b.series, "fr") || (a.tome ?? 0) - (b.tome ?? 0));
-  return res.slice(0, 20);
+  if (m && res.some((r) => r.tome === Number(m[2]))) res = res.filter((r) => r.tome === Number(m[2]));
+  res.sort((a, b) => a.series.localeCompare(b.series, "fr", { sensitivity: "base" }) || (a.tome ?? 0) - (b.tome ?? 0));
+  return res.slice(0, 150);
 }
 
 async function setCover(userId: string, mangaId: string, url: string) {
@@ -166,7 +173,7 @@ async function setCover(userId: string, mangaId: string, url: string) {
   const up = await admin.storage.from("covers").upload(path, await img.arrayBuffer(), { contentType: "image/jpeg", upsert: true });
   if (up.error) throw new Error(up.error.message);
   const cover = admin.storage.from("covers").getPublicUrl(path).data.publicUrl;
-  const data = { ...row.data, cover, coverSource: host.includes("amazon") ? "amazon" : "openlibrary" };
+  const data = { ...row.data, cover, coverSource: host.split(".").slice(-2)[0] };
   await admin.from("mangas").update({ data }).eq("id", mangaId);
   return data;
 }
