@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mangatek</title>
+<meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Mangatek">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f3ee; --surface: #fffdf9; --text: #1d1b18; --muted: #6f6a62;
+    --line: #e4ded4; --accent: #d9661a; --accent-text: #fff; --ok: #4f8a2b; --shadow: 0 1px 3px rgba(0,0,0,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151412; --surface: #1f1d1a; --text: #f0ebe3; --muted: #a39c91;
+            --line: #34302b; --accent: #f29a3a; --accent-text: #151412; --ok: #8cc65c; --shadow: 0 1px 3px rgba(0,0,0,.5); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+           padding: 12px 16px 10px; padding-top: max(12px, env(safe-area-inset-top)); }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .logo { width: 30px; height: 30px; flex: none; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+  #count { color: var(--muted); font-size: 13px; }
+  .who { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .who select { padding: 5px 8px; font-size: 14px; }
+  .offline { font-size: 12px; color: var(--accent); }
+  .tools { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  input[type=search], input[type=email], input[type=password], select, input[type=text] {
+    font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 12px; font-size: 16px; }
+  input[type=search] { flex: 1 1 220px; min-width: 0; }
+  button, .btn { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+           border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button:disabled { opacity: .5; cursor: wait; }
+  [hidden] { display: none !important; }
+  .tabs { display: flex; gap: 4px; margin-top: 10px; background: var(--line); border-radius: 10px; padding: 3px; max-width: 560px; }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 7px 6px; border-radius: 8px; font-weight: 600;
+                 color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .tabs button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  main { padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px 12px; }
+  @media (max-width: 500px) { .grid { grid-template-columns: repeat(3, 1fr); gap: 14px 10px; } }
+  .card { cursor: pointer; min-width: 0; }
+  .cover { aspect-ratio: 2 / 3; width: 100%; border-radius: 5px; background: var(--line); object-fit: cover;
+           display: block; box-shadow: var(--shadow); }
+  .ph { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; text-align: center; padding: 8px; }
+  .card .t { font-weight: 600; margin-top: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .a { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .price { font-weight: 600; color: var(--accent); font-size: 12px; }
+  .group { grid-column: 1 / -1; font-size: 13px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-top: 6px; }
+  .group .sub { font-weight: 400; color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 60px 0; grid-column: 1 / -1; }
+  dialog { border: 0; border-radius: 16px; padding: 0; background: var(--surface); color: var(--text);
+           width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 24px);
+           overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  #dlgBody:focus { outline: none; }
+  .dlgbar { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; padding: 8px 10px 0;
+            background: linear-gradient(var(--surface) 70%, transparent); }
+  .dlgbar button { font-size: 14px; padding: 6px 12px; }
+  body.locked { position: fixed; left: 0; right: 0; overflow: hidden; }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  .dlg { padding: 18px; }
+  .dlg .cover { max-width: 220px; margin: 0 auto 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  label input[type=text], label input[type=email], label input[type=password], label select { width: 100%; margin-top: 3px; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .meta a { color: var(--accent); }
+  .row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .row .spacer { flex: 1; }
+  h2 { font-size: 18px; margin: 0 0 4px; }
+  .results { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .res { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+  .res img, .res .noimg { width: 46px; height: 69px; object-fit: cover; border-radius: 4px; flex: none; background: var(--line); }
+  .res .info { flex: 1; min-width: 0; }
+  .res .info b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .res .info span { color: var(--muted); font-size: 12px; }
+  .note { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-top: 12px; }
+  .note.yes { border-color: var(--ok); }
+  .note.yes b { color: var(--ok); }
+  .note.no b { color: var(--accent); }
+  .pricebox { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; font-size: 14px; }
+  .pricebox h3 { font-size: 14px; margin: 0 0 6px; }
+  .pricebox .big { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .shops { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .shops a { font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; color: var(--text); text-decoration: none; }
+  .panel { max-width: 520px; margin: 0 auto; }
+  .panel section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  .panel h3 { margin: 0 0 6px; font-size: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 8px; }
+  .stats div { background: var(--bg); border-radius: 10px; padding: 10px; }
+  .stats b { display: block; font-size: 20px; }
+  .stats span { font-size: 12px; color: var(--muted); }
+  .login { max-width: 360px; margin: 12vh auto 0; padding: 0 16px; text-align: center; }
+  .login .logo { width: 72px; height: 72px; }
+  .login form { text-align: left; margin-top: 18px; }
+  .login button { width: 100%; margin-top: 16px; }
+  #reader { margin-top: 12px; border-radius: 12px; overflow: hidden; background: #000; }
+  #reader video { width: 100%; max-height: 50vh; object-fit: cover; display: block; }
+  .scanbar { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .done { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); margin-top: 12px; }
+  .done span { flex: 1; font-size: 14px; }
+  #toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--text); color: var(--bg);
+           padding: 10px 16px; border-radius: 10px; font-size: 14px; display: none; max-width: calc(100vw - 32px); z-index: 20; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="peau" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5f9a2e"/><stop offset=".45" stop-color="#e0861c"/><stop offset="1" stop-color="#c8331f"/>
+    </linearGradient>
+  </defs>
+  <symbol id="logo" viewBox="60 20 400 470">
+    <g transform="rotate(-24 250 290)">
+      <path d="M250 88 C352 88 418 182 412 296 C406 404 336 466 246 466 C150 466 92 400 94 300 C96 190 150 88 250 88 Z" fill="url(#peau)"/>
+      <path d="M250 108 C340 108 394 192 389 296 C384 392 324 444 246 444 C164 444 116 388 117 300 C119 202 165 108 250 108 Z" fill="#f7a823"/>
+      <ellipse cx="250" cy="282" rx="66" ry="116" fill="#f8e3a6"/>
+    </g>
+    <rect x="236" y="34" width="18" height="62" rx="7" fill="#6b4a2b" transform="rotate(14 245 70)"/>
+    <path d="M262 64 C300 22 368 20 404 44 C366 80 304 90 262 64 Z" fill="#4f8a2b"/>
+  </symbol>
+</svg>
+
+<div id="loginView" class="login" hidden>
+  <svg class="logo"><use href="#logo"/></svg>
+  <h1>Mangatek</h1>
+  <div class="meta">Connecte-toi pour accéder à ta collection.</div>
+  <form id="loginForm">
+    <label>E-mail<input type="email" id="lEmail" autocomplete="username" required></label>
+    <label>Mot de passe<input type="password" id="lPass" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">Se connecter</button>
+  </form>
+</div>
+
+<div id="appView" hidden>
+  <header>
+    <div class="top">
+      <svg class="logo"><use href="#logo"/></svg>
+      <h1>Mangatek</h1><span id="count"></span><span id="offline" class="offline" hidden>hors ligne</span>
+      <div class="who">Collection de <select id="viewing"></select></div>
+    </div>
+    <div class="tabs" id="tabs">
+      <button data-tab="Collection">Collection</button>
+      <button data-tab="Wishlist">Wishlist</button>
+      <button data-tab="Moi">Moi</button>
+    </div>
+    <div class="tools" id="tools">
+      <input type="search" id="q" placeholder="Rechercher une série, un auteur, un éditeur..." autocomplete="off">
+      <select id="sort">
+        <option value="series">Par série</option>
+        <option value="author">Par auteur</option>
+        <option value="publisher">Par éditeur</option>
+        <option value="added">Derniers ajouts</option>
+      </select>
+      <button id="addBtn" class="primary">Ajouter un manga</button>
+      <button id="checkBtn">Vérifier un prix</button>
+    </div>
+  </header>
+  <main><div id="grid" class="grid"></div><div id="panel" class="panel" hidden></div></main>
+</div>
+
+<dialog id="dlg"><div class="dlgbar"><button id="dlgClose" type="button">Fermer</button></div><div class="dlg" id="dlgBody" tabindex="-1" autofocus></div></dialog>
+<div id="toast"></div>
+
+<script>
+// Même base Supabase que Phonotek : mêmes comptes, table « mangas » à part.
+const SUPABASE_URL = "https://ugasyhsxwabairtzihvb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_LxZwfOOwNefFS9rejT-JiA_Dv6vHKH5";   // clé publique, faite pour être dans l'application
+const db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+const state = { me: null, mangas: [], profiles: [], viewing: null, tab: "Collection", q: "", sort: "series" };
+const NO_AUTHOR = "Auteur inconnu", NO_PUBLISHER = "Éditeur inconnu";
+
+const $ = s => document.querySelector(s);
+const norm = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const sortKey = s => norm(s).replace(/^(the|les|le|la|l')\s+/, "");
+// Clé de série ou d'auteur : « One piece » et « One Piece » donnent la même clé.
+const key = s => sortKey(s).replace(/[^a-z0-9]/g, "");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const euros = v => v == null ? "" : v.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+const tabOf = m => m.wish ? "Wishlist" : "Collection";
+const mine = m => m.owner === state.me;
+const nameOf = id => (state.profiles.find(p => p.id === id) || {}).name || "?";
+const deName = n => (/^[aeiouyhàâéèêëîïôûü]/i.test(n) ? "d’" : "de ") + n;
+const today = () => new Date().toISOString().slice(0, 10);
+const authorOf = m => (m.authors || "").split(",")[0].trim() || NO_AUTHOR;
+const tomeLabel = m => m.tome != null ? "Tome " + m.tome : (m.title || "Hors série");
+const fullName = m => m.series + (m.tome != null ? " " + m.tome : "");
+const plural = (n, one, many) => n + " " + (n > 1 ? many : one);
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem("mangatek." + k)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem("mangatek." + k, JSON.stringify(v)); } catch (e) {} },
+};
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.style.display = "none", 3500);
+}
+
+// ---------- ISBN ----------
+const isIsbn = q => /^[\d\s-]{9,17}[\dXx]?$/.test(q.trim()) && [10, 13].includes(q.replace(/[^\dXx]/g, "").length);
+function isbn13(raw) {
+  const d = raw.replace(/[^\dXx]/g, "").toUpperCase();
+  if (d.length !== 10) return d;
+  const core = "978" + d.slice(0, 9);
+  const sum = [...core].reduce((s, c, i) => s + Number(c) * (i % 2 ? 3 : 1), 0);
+  return core + ((10 - sum % 10) % 10);
+}
+
+// ---------- Données ----------
+async function fn(action, payload = {}) {
+  if (!navigator.onLine) throw new Error("Pas de réseau : réessaie quand tu seras connecté.");
+  const { data, error } = await db.functions.invoke("mangatek-api", { body: Object.assign({ action }, payload) });
+  if (error) {
+    let msg = error.message;
+    try { msg = (await error.context.json()).error || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function rowToManga(r) { return Object.assign({}, r.data, { id: r.id, owner: r.owner }); }
+function mangaData(m) { const d = Object.assign({}, m); delete d.id; delete d.owner; return d; }
+const saveCache = () => store.set("cache", { me: state.me, mangas: state.mangas, profiles: state.profiles });
+
+async function loadAll() {
+  const [mangas, profiles] = await Promise.all([
+    db.from("mangas").select("id,owner,data").limit(10000),
+    db.from("profiles").select("id,name"),
+  ]);
+  if (mangas.error) throw mangas.error;
+  state.mangas = mangas.data.map(rowToManga);
+  state.profiles = profiles.data || [];
+  saveCache();
+  precacheCovers();
+}
+
+function precacheCovers() {
+  const urls = state.mangas.map(m => m.cover).filter(Boolean);
+  navigator.serviceWorker && navigator.serviceWorker.ready
+    .then(reg => reg.active && reg.active.postMessage({ type: "precache", urls })).catch(() => {});
+}
+
+async function saveManga(m) {
+  if (!navigator.onLine) throw new Error("Pas de réseau : la modification n’a pas été enregistrée.");
+  const { error } = await db.from("mangas").update({ data: mangaData(m) }).eq("id", m.id);
+  if (error) throw new Error(error.message);
+  saveCache();
+}
+
+// ---------- Séries : tomes possédés et tomes manquants ----------
+function ranges(nums) {
+  const out = [];
+  for (let i = 0; i < nums.length; i++) {
+    let j = i;
+    while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+    out.push(i === j ? nums[i] : j === i + 1 ? nums[i] + ", " + nums[j] : nums[i] + " à " + nums[j]);
+    i = j;
+  }
+  return out.join(", ");
+}
+
+function seriesStatus(owner, series) {
+  const k = key(series);
+  const own = state.mangas.filter(m => m.owner === owner && !m.wish && key(m.series) === k);
+  const nums = [...new Set(own.map(m => m.tome).filter(n => n != null))].sort((a, b) => a - b);
+  const max = nums.length ? nums[nums.length - 1] : 0;
+  const missing = [];
+  for (let n = 1; n <= max; n++) if (!nums.includes(n)) missing.push(n);
+  return { count: own.length, nums, missing };
+}
+
+// ---------- Affichage ----------
+function showApp() {
+  $("#loginView").hidden = true; $("#appView").hidden = false;
+  // Seuls les membres qui ont des mangas apparaissent (les comptes Phonotek sans manga restent cachés).
+  const people = state.profiles.filter(p => p.id === state.me || p.id === state.viewing || state.mangas.some(m => m.owner === p.id));
+  $("#viewing").innerHTML = people.map(p => `<option value="${p.id}"${p.id === state.viewing ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+  render();
+}
+
+function inView(m) { return m.owner === state.viewing && tabOf(m) === state.tab; }
+
+function render() {
+  const isMe = state.viewing === state.me;
+  document.querySelectorAll("#tabs button").forEach(b => {
+    b.classList.toggle("on", b.dataset.tab === state.tab);
+    if (b.dataset.tab === "Moi") return;
+    const n = state.mangas.filter(m => m.owner === state.viewing && tabOf(m) === b.dataset.tab).length;
+    b.textContent = b.dataset.tab + " (" + n + ")";
+  });
+  $("#offline").hidden = navigator.onLine;
+  if (state.tab === "Moi") { $("#tools").hidden = true; $("#grid").hidden = true; $("#count").textContent = ""; return renderMe(); }
+  $("#tools").hidden = false; $("#grid").hidden = false; $("#panel").hidden = true;
+  $("#addBtn").hidden = !isMe;
+  $("#addBtn").textContent = state.tab === "Wishlist" ? "Ajouter à la wishlist" : "Ajouter un manga";
+
+  const words = norm(state.q).split(/\s+/).filter(Boolean);
+  const all = state.mangas.filter(inView);
+  const list = all.filter(m => words.every(w =>
+    norm([m.series, m.tome, m.title, m.authors, m.publisher, m.isbn].join(" ")).includes(w)));
+  const by = state.sort;
+  const bySeries = (x, y) => key(x.series).localeCompare(key(y.series)) || (x.tome ?? 9999) - (y.tome ?? 9999);
+  const groupOf = m => by === "author" ? authorOf(m) : by === "publisher" ? (m.publisher || NO_PUBLISHER) : m.series;
+  list.sort((x, y) => by === "added" ? (y.added || "").localeCompare(x.added || "") || bySeries(x, y)
+    : by === "series" ? bySeries(x, y)
+    : key(groupOf(x)).localeCompare(key(groupOf(y))) || bySeries(x, y));
+  const series = new Set(all.map(m => key(m.series))).size;
+  $("#count").textContent = (list.length === all.length ? all.length : list.length + " sur " + all.length) + " "
+    + (all.length > 1 ? "tomes" : "tome") + " · " + plural(series, "série", "séries");
+
+  if (!list.length) {
+    $("#grid").innerHTML = `<div class="empty">${all.length ? "Aucun manga trouvé."
+      : state.tab === "Wishlist" ? (isMe ? "Ta wishlist est vide.<br>Clique sur « Ajouter à la wishlist »." : esc(nameOf(state.viewing)) + " n’a rien dans sa wishlist.")
+      : (isMe ? "Aucun manga pour l’instant.<br>Clique sur « Ajouter un manga » et scanne le code-barres au dos." : esc(nameOf(state.viewing)) + " n’a pas encore de manga.")}</div>`;
+    return;
+  }
+  let html = "", last = null;
+  for (const m of list) {
+    if (by !== "added") {
+      const g = groupOf(m);
+      if (key(g) !== last) {
+        last = key(g);
+        const n = list.filter(x => key(groupOf(x)) === last).length;
+        let sub = " · " + plural(n, "tome", "tomes");
+        if (by === "series" && state.tab === "Collection") {
+          const st = seriesStatus(state.viewing, m.series);
+          if (st.missing.length) sub += " · manque " + ranges(st.missing);
+        } else if (by !== "series") {
+          sub = " · " + plural(new Set(list.filter(x => key(groupOf(x)) === last).map(x => key(x.series))).size, "série", "séries") + sub;
+        }
+        html += `<div class="group">${esc(g)}<span class="sub">${esc(sub)}</span></div>`;
+      }
+    }
+    const img = m.cover ? `<img class="cover" loading="lazy" src="${esc(m.cover)}" alt="">` : `<div class="cover ph">${esc(fullName(m))}</div>`;
+    const title = by === "series" ? tomeLabel(m) : fullName(m);
+    const sub = by === "author" ? (m.publisher || "") : by === "series" ? (m.title || "") : authorOf(m);
+    html += `<div class="card" data-id="${m.id}">${img}<div class="t">${esc(title)}</div>
+      ${sub ? `<div class="a">${esc(sub)}</div>` : ""}
+      ${m.wish && m.priceNew != null ? `<div class="price">neuf ${euros(m.priceNew)}</div>` : ""}</div>`;
+  }
+  $("#grid").innerHTML = html;
+}
+
+// ---------- Onglet Moi ----------
+function renderMe() {
+  const p = state.profiles.find(x => x.id === state.me) || { name: "" };
+  const own = state.mangas.filter(m => m.owner === state.me && !m.wish);
+  const value = own.reduce((s, m) => s + (m.priceNew || 0), 0);
+  const spent = own.reduce((s, m) => s + ((m.purchase || {}).price || 0), 0);
+  $("#panel").hidden = false;
+  $("#panel").innerHTML = `
+    <section><h3>Ma collection</h3>
+      <div class="stats">
+        <div><b>${own.length}</b><span>tomes</span></div>
+        <div><b>${new Set(own.map(m => key(m.series))).size}</b><span>séries</span></div>
+        <div><b>${euros(value)}</b><span>valeur à neuf</span></div>
+        <div><b>${euros(spent)}</b><span>dépensé (prix saisis)</span></div>
+      </div></section>
+    <section><h3>Mon profil</h3>
+      <label>Prénom<input type="text" id="pName" value="${esc(p.name)}"></label>
+      <div class="row"><span class="spacer"></span><button id="pSave" class="primary">Enregistrer</button></div></section>
+    <section><h3>Ma wishlist</h3>
+      <div class="meta">${plural(state.mangas.filter(m => m.owner === state.me && m.wish).length, "manga", "mangas")} que tu aimerais avoir.</div>
+      <div class="row"><button id="goWish">Voir ma wishlist</button><button id="coteBtn" class="primary">Vérifier un prix</button></div></section>
+    <section><h3>Mot de passe</h3>
+      <label>Nouveau mot de passe<input type="password" id="pPass" autocomplete="new-password"></label>
+      <div class="row"><span class="spacer"></span><button id="pPassBtn">Changer le mot de passe</button></div></section>
+    <section><h3>Installer sur l’iPhone</h3>
+      <div class="meta">Dans Safari, touche le bouton Partager, puis « Sur l’écran d’accueil ». Mangatek s’ouvrira alors comme une application, même sans réseau.</div></section>
+    <div class="row"><span class="spacer"></span><button id="logout">Se déconnecter</button></div>`;
+  $("#pSave").onclick = async () => {
+    const name = $("#pName").value.trim(); if (!name) return;
+    const { error } = await db.from("profiles").upsert({ id: state.me, name });
+    if (error) return toast(error.message);
+    const prof = state.profiles.find(x => x.id === state.me);
+    if (prof) prof.name = name; else state.profiles.push({ id: state.me, name });
+    showApp(); toast("Profil enregistré.");
+  };
+  $("#goWish").onclick = () => { state.viewing = state.me; state.tab = "Wishlist"; showApp(); };
+  $("#coteBtn").onclick = () => openAdd("check");
+  $("#pPassBtn").onclick = async () => {
+    const pw = $("#pPass").value;
+    if (pw.length < 8) return toast("Choisis au moins 8 caractères.");
+    const { error } = await db.auth.updateUser({ password: pw });
+    toast(error ? error.message : "Mot de passe changé.");
+    $("#pPass").value = "";
+  };
+  $("#logout").onclick = async () => { await db.auth.signOut(); store.set("cache", null); location.reload(); };
+}
+
+// ---------- Fiche d'un tome ----------
+function openManga(id) {
+  const m = state.mangas.find(x => x.id === id);
+  const edit = mine(m);
+  const img = m.cover ? `<img class="cover" src="${esc(m.cover)}" alt="">` : `<div class="cover ph">Pas de couverture</div>`;
+  const st = seriesStatus(m.owner, m.series);
+  const metaBits = [m.publisher, m.year, m.isbn ? "ISBN " + m.isbn : "", "ajouté le " + m.added,
+    edit ? "" : "collection " + deName(nameOf(m.owner))].filter(Boolean).map(esc).join(" · ");
+  const val = v => esc(v ?? "");
+  $("#dlgBody").innerHTML = `
+    ${img}
+    <div id="readBox"><h2>${esc(m.series)}${m.tome != null ? " · tome " + m.tome : ""}</h2>
+      ${m.title ? `<div>${esc(m.title)}</div>` : ""}<div class="meta" style="margin-top:4px">${esc(m.authors || NO_AUTHOR)}</div></div>
+    ${edit ? `<div id="editBox" hidden>
+      <label>Série<input type="text" id="fSeries" value="${val(m.series)}"></label>
+      <label>Tome<input type="text" id="fTome" inputmode="numeric" value="${val(m.tome)}"></label>
+      <label>Titre du tome (facultatif)<input type="text" id="fTitle" value="${val(m.title)}"></label>
+      <label>Auteur(s)<input type="text" id="fAuthors" value="${val(m.authors)}"></label>
+      <label>Éditeur<input type="text" id="fPublisher" value="${val(m.publisher)}"></label>
+      <label>Prix neuf (€)<input type="text" id="fNew" inputmode="decimal" value="${m.priceNew != null ? String(m.priceNew).replace(".", ",") : ""}"></label>
+      ${!m.wish ? `
+      <label>Prix payé (€)<input type="text" id="fPaid" inputmode="decimal" value="${m.purchase && m.purchase.price != null ? String(m.purchase.price).replace(".", ",") : ""}"></label>
+      <label>Acheté où<input type="text" id="fShop" placeholder="Brocante, Fnac, Vinted..." value="${val((m.purchase || {}).shop)}"></label>
+      <label>Date d’achat<input type="date" id="fBought" value="${val((m.purchase || {}).date)}"></label>` : ""}</div>` : ""}
+    ${m.purchase && m.purchase.price != null ? `<div class="meta">${purchaseLine(m)}</div>` : ""}
+    <div class="meta">${metaBits}</div>
+    ${!m.wish && st.count > 1 ? `<div class="meta">${esc(m.series)} : ${plural(st.count, "tome", "tomes")} dans la collection${st.missing.length ? ", il manque " + ranges(st.missing) : ""}.</div>` : ""}
+    <div class="row">
+      ${edit ? '<button id="editBtn">Modifier</button><label class="btn" style="margin:0;font-size:inherit;color:inherit">Photo de la couverture<input type="file" id="photo" accept="image/*" hidden></label>' : ""}
+      ${edit && m.isbn && !m.cover ? '<button id="autoCover">Chercher la couverture</button>' : ""}
+      ${edit && m.wish ? '<button id="boughtBtn">Je l’ai acheté</button>' : ""}
+      ${edit ? '<button id="delBtn">Supprimer</button>' : ""}
+      <span class="spacer"></span>
+      <button id="closeBtn" autofocus>Fermer</button>
+      ${edit ? '<button id="saveBtn" class="primary" hidden>Enregistrer</button>' : ""}
+    </div>
+    <div id="coverMsg"></div>
+    <div class="pricebox">${priceHtml(m)}</div>`;
+  $("#closeBtn").onclick = () => $("#dlg").close();
+  if (edit) {
+    $("#editBtn").onclick = () => {
+      $("#readBox").hidden = true; $("#editBox").hidden = false;
+      $("#saveBtn").hidden = false; $("#editBtn").hidden = true;
+    };
+    $("#photo").onchange = e => e.target.files[0] && uploadPhoto(m, e.target.files[0]);
+    if ($("#autoCover")) $("#autoCover").onclick = async () => {
+      $("#coverMsg").innerHTML = '<div class="meta">Recherche de la couverture...</div>';
+      try {
+        const { cover } = await fn("cover", { isbn: m.isbn });
+        if (!cover) { $("#coverMsg").innerHTML = '<div class="meta">Aucune couverture trouvée : prends-la en photo.</div>'; return; }
+        Object.assign(m, await fn("setCover", { mangaId: m.id, url: cover }));
+        saveCache(); render(); openManga(m.id); toast("Couverture ajoutée.");
+      } catch (e) { $("#coverMsg").innerHTML = `<div class="meta">${esc(e.message)}</div>`; }
+    };
+    $("#saveBtn").onclick = async () => {
+      const before = JSON.parse(JSON.stringify(m));
+      const num = s => { const v = parseFloat(s.replace(",", ".").replace(/[^\d.]/g, "")); return isNaN(v) ? null : Math.round(v * 100) / 100; };
+      const tome = parseInt($("#fTome").value, 10);
+      Object.assign(m, { series: $("#fSeries").value.trim() || m.series, tome: isNaN(tome) ? null : tome,
+        title: $("#fTitle").value.trim(), authors: $("#fAuthors").value.trim(), publisher: $("#fPublisher").value.trim(),
+        priceNew: num($("#fNew").value), edited: true });
+      if ($("#fPaid")) {
+        const price = num($("#fPaid").value);
+        m.purchase = price == null && !$("#fShop").value.trim() && !$("#fBought").value ? null
+          : { price, shop: $("#fShop").value.trim(), date: $("#fBought").value };
+      }
+      try { await saveManga(m); render(); $("#dlg").close(); toast("Manga mis à jour."); }
+      catch (e) { Object.keys(m).forEach(k => delete m[k]); Object.assign(m, before); toast(e.message); }
+    };
+    if ($("#boughtBtn")) $("#boughtBtn").onclick = async () => {
+      m.wish = false; m.added = today();
+      try { await saveManga(m); render(); $("#dlg").close(); toast(`« ${fullName(m)} » est passé dans ta collection.`); }
+      catch (e) { m.wish = true; toast(e.message); }
+    };
+    $("#delBtn").onclick = async () => {
+      if (!confirm(`Supprimer « ${fullName(m)} » ${m.wish ? "de ta wishlist" : "de ta collection"} ?`)) return;
+      const { error } = await db.from("mangas").delete().eq("id", m.id);
+      if (error) return toast(error.message);
+      state.mangas = state.mangas.filter(x => x.id !== m.id);
+      saveCache(); render(); $("#dlg").close(); toast("Manga supprimé.");
+    };
+  }
+  openDialog();
+}
+
+// Photo prise avec le téléphone : réduite à 600 pixels de large, puis rangée dans le dossier du membre.
+async function uploadPhoto(m, file) {
+  $("#coverMsg").innerHTML = '<div class="meta">Envoi de la photo...</div>';
+  try {
+    if (!navigator.onLine) throw new Error("Pas de réseau : réessaie plus tard.");
+    const bmp = await createImageBitmap(file);
+    const w = Math.min(600, bmp.width), h = Math.round(bmp.height * w / bmp.width);
+    const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+    canvas.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.85));
+    const path = `${state.me}/manga-${m.id}-${Date.now()}.jpg`;
+    const up = await db.storage.from("covers").upload(path, blob, { contentType: "image/jpeg" });
+    if (up.error) throw new Error(up.error.message);
+    m.cover = db.storage.from("covers").getPublicUrl(path).data.publicUrl; m.coverSource = "photo";
+    await saveManga(m); render(); openManga(m.id); toast("Couverture enregistrée.");
+  } catch (e) { $("#coverMsg").innerHTML = `<div class="meta">${esc(e.message)}</div>`; }
+}
+
+function purchaseLine(m) {
+  const p = m.purchase || {};
+  const date = p.date ? " le " + new Date(p.date).toLocaleDateString("fr-FR") : "";
+  return `Acheté ${euros(p.price)}${p.shop ? " (" + esc(p.shop) + ")" : ""}${date}`;
+}
+
+// ---------- Prix ----------
+// Pas de cote officielle des mangas : prix neuf (BnF) et liens vers les annonces d'occasion.
+function shopLinks(m) {
+  const words = `${m.series || ""}${m.tome != null ? " tome " + m.tome : ""}`.trim();
+  const q = encodeURIComponent(words + " manga");
+  const exact = encodeURIComponent(m.isbn || words);
+  const shops = [
+    ["Vinted", `https://www.vinted.fr/catalog?search_text=${encodeURIComponent(words)}`],
+    ["Leboncoin", `https://www.leboncoin.fr/recherche?text=${encodeURIComponent(words)}`],
+    ["eBay, ventes conclues", `https://www.ebay.fr/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1`],
+    ["Rakuten", `https://fr.shopping.rakuten.com/search/${exact}`],
+    ["Amazon", `https://www.amazon.fr/s?k=${exact}`],
+  ];
+  if (m.isbn) shops.push(["Momox (prix de rachat)", `https://www.momox.fr/offre/${m.isbn}`]);
+  return '<div class="shops">' + shops.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join("") + "</div>";
+}
+
+function priceHtml(m) {
+  const paid = m.purchase && m.purchase.price != null ? m.purchase.price : null;
+  let html = "<h3>Prix</h3>";
+  html += m.priceNew != null
+    ? `<div><span class="big">${euros(m.priceNew)}</span> prix neuf</div>
+       <div class="meta" style="margin-top:2px">En occasion, un tome courant se revend en général bien moins cher que le prix neuf : compare avec les annonces.</div>`
+    : "<div class='meta'>Prix neuf inconnu.</div>";
+  if (paid != null && m.priceNew) html += `<div class="meta">Payé ${euros(paid)}, soit ${Math.round(paid / m.priceNew * 100)} % du prix neuf.</div>`;
+  return html + `<div class="meta"><b>Annonces d’occasion :</b></div>` + shopLinks(m);
+}
+
+// ---------- Scan du code-barres (repris de Phonotek) ----------
+// Moteur ZXing (via le module barcode-detector) : l'ISBN d'un manga est un code EAN-13.
+const SCAN_LIB = "https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/+esm";
+const SCAN_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
+let scanStream = null, scanTimer = null;
+
+async function getDetector() {
+  if ("BarcodeDetector" in window) {
+    try {
+      const supported = await window.BarcodeDetector.getSupportedFormats();
+      if (SCAN_FORMATS.every(f => supported.includes(f))) return new window.BarcodeDetector({ formats: SCAN_FORMATS });
+    } catch (e) {}
+  }
+  const mod = await import(SCAN_LIB).catch(() => { throw new Error("Lecteur de code-barres indisponible (réseau ?)."); });
+  return new mod.BarcodeDetector({ formats: SCAN_FORMATS });
+}
+
+function stopScan() {
+  clearTimeout(scanTimer); scanTimer = null;
+  if (scanStream) scanStream.getTracks().forEach(t => t.stop());
+  scanStream = null;
+}
+
+// Ouvre l'appareil photo dans « box » et renvoie le code lu (ou null si annulé).
+async function scanBarcode(box) {
+  box.innerHTML = '<div class="meta">Préparation du lecteur...</div>';
+  const detector = await getDetector();
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+  } catch (e) {
+    box.innerHTML = '<div class="note">Impossible d’ouvrir l’appareil photo. Autorise l’accès à la caméra (Réglages, puis Safari, puis Appareil photo), puis réessaie.</div>';
+    return null;
+  }
+  box.innerHTML = `<div id="reader"><video id="scanVideo" playsinline muted autoplay></video></div>
+    <div class="scanbar"><span class="meta" style="margin:0;flex:1">Vise le code-barres au dos du manga, à 15 cm environ.</span><button id="scanStop">Annuler</button></div>`;
+  const video = $("#scanVideo");
+  video.srcObject = scanStream;
+  await video.play().catch(() => {});
+  return new Promise(resolve => {
+    let last = "", hits = 0;
+    const finish = code => { stopScan(); box.innerHTML = ""; resolve(code); };
+    $("#scanStop").onclick = () => finish(null);
+    const tick = async () => {
+      if (!scanStream) return;
+      try {
+        if (video.readyState >= 2) {
+          // Les mangas ont parfois un second code (prix) : on ne garde que l'ISBN (978 ou 979).
+          const found = (await detector.detect(video)).find(b => /^97[89]\d{10}$/.test(b.rawValue));
+          if (found) {
+            // Deux lectures identiques de suite : on évite les erreurs de lecture.
+            hits = found.rawValue === last ? hits + 1 : 1; last = found.rawValue;
+            if (hits >= 2) { if (navigator.vibrate) navigator.vibrate(80); return finish(last); }
+          }
+        }
+      } catch (e) {}
+      scanTimer = setTimeout(tick, 150);
+    };
+    tick();
+  });
+}
+
+// ---------- Ajout, wishlist et vérification en brocante ----------
+const MODES = {
+  collection: { title: "Ajouter un manga", button: "Ajouter", wish: false },
+  wish: { title: "Ajouter à la wishlist", button: "Ajouter", wish: true },
+  check: { title: "Vérifier un manga", button: "Voir" },
+};
+
+function resLine(r, button) {
+  return `<div class="res">${r.cover ? `<img src="${esc(r.cover)}" alt="">` : '<div class="noimg"></div>'}
+    <div class="info"><b>${esc(r.series || "Titre inconnu")}${r.tome != null ? " · tome " + r.tome : ""}</b>
+      <span>${[r.title, r.authors, r.publisher, r.year].filter(Boolean).map(esc).join(" · ")}</span></div>${button || ""}</div>`;
+}
+
+function openAdd(mode) {
+  const M = MODES[mode];
+  // En vérification, on compare avec la collection affichée (celle de son fils, par exemple).
+  const owner = mode === "check" ? state.viewing : state.me;
+  $("#dlgBody").innerHTML = `
+    <h2>${M.title}</h2>
+    ${mode === "check" && owner !== state.me ? `<div class="meta" style="margin-top:0">Comparé à la collection ${esc(deName(nameOf(owner)))}.</div>` : ""}
+    <div class="row" style="margin-top:12px"><button id="scanBtn" class="primary" style="flex:1">Scanner le code-barres</button></div>
+    <div class="meta" style="margin-top:16px">Ou cherche par série et numéro (ou tape l’ISBN) :</div>
+    <div class="row" style="margin-top:6px">
+      <input type="search" id="dq" placeholder="Ex. : One Piece 56" style="flex:1;min-width:0">
+      <button id="dGo">Rechercher</button>
+    </div>
+    <div id="scanBox"></div>
+    <div id="dRes" class="results"></div>
+    <div class="row">${mode !== "check" ? '<button id="manualBtn">Saisir à la main</button>' : ""}<span class="spacer"></span><button id="closeBtn">Fermer</button></div>
+    <div id="manual"></div>`;
+  $("#closeBtn").onclick = () => { stopScan(); $("#dlg").close(); };
+  if ($("#manualBtn")) $("#manualBtn").onclick = () => showManualForm(M.wish, {});
+
+  const startScan = async () => {
+    $("#dRes").innerHTML = ""; $("#manual").innerHTML = "";
+    try {
+      const code = await scanBarcode($("#scanBox"));
+      if (!code) return;
+      $("#dq").value = code; go(true);
+    } catch (e) { toast(e.message); }
+  };
+  const nextButton = msg => {
+    $("#dRes").innerHTML = `<div class="done"><span>${msg}</span><button id="nextScan" class="primary">Scanner le suivant</button></div>`;
+    $("#dq").value = "";
+    $("#nextScan").onclick = startScan;
+  };
+
+  const handleIsbn = async (isbn, scanned) => {
+    const local = state.mangas.find(m => m.owner === owner && m.isbn === isbn && !m.wish);
+    if (mode !== "check" && local) return nextButton(`<b>Déjà dans ta collection :</b> ${esc(fullName(local))}.`);
+    if (!navigator.onLine) {
+      if (mode === "check") return showCheck({ isbn, series: local ? local.series : "", tome: local ? local.tome : null }, owner);
+      $("#dRes").innerHTML = '<div class="note">Pas de réseau : impossible de retrouver ce manga pour l’instant.</div>';
+      return;
+    }
+    $("#dRes").innerHTML = '<div class="meta">Recherche dans le catalogue de la BnF...</div>';
+    const r = await fn("isbn", { isbn });
+    if (r.notFound) {
+      if (mode === "check") return showCheck(Object.assign({ series: local ? local.series : "" }, r), owner);
+      $("#dRes").innerHTML = `<div class="note">L’ISBN ${esc(isbn)} est inconnu du catalogue. Saisis ce manga à la main ci-dessous.</div>`;
+      return showManualForm(M.wish, { isbn, cover: r.cover });
+    }
+    if (mode === "check") return showCheck(r, owner);
+    if (scanned) {
+      // Saisie en série : ajout direct, puis on propose tout de suite le tome suivant.
+      $("#dRes").innerHTML = resLine(r);
+      const ok = await addManga(Object.assign({ wish: M.wish }, r));
+      if (ok) nextButton(`« ${esc(fullName(r))} » ajouté${M.wish ? " à ta wishlist" : ""}.`);
+      return;
+    }
+    $("#dRes").innerHTML = resLine(r, `<button id="addOne">${M.button}</button>`);
+    $("#addOne").onclick = e => addManga(Object.assign({ wish: M.wish }, r), e.target);
+  };
+
+  const go = async scanned => {
+    const q = $("#dq").value.trim(); if (!q) return;
+    $("#manual").innerHTML = "";
+    try {
+      if (isIsbn(q)) return await handleIsbn(isbn13(q), scanned === true);
+      $("#dRes").innerHTML = '<div class="meta">Recherche dans le catalogue de la BnF...</div>';
+      const res = await fn("search", { q });
+      if (!res.length) { $("#dRes").innerHTML = '<div class="meta">Aucun manga trouvé. Essaie d’autres mots, ou scanne le code-barres.</div>'; return; }
+      $("#dRes").innerHTML = res.map((r, i) => {
+        const has = state.mangas.some(m => m.owner === owner && m.isbn === r.isbn && !m.wish);
+        return resLine(r, has && mode !== "check" ? '<span class="meta" style="margin:0">déjà là</span>' : `<button data-i="${i}">${M.button}</button>`);
+      }).join("");
+      $("#dRes").querySelectorAll("button[data-i]").forEach(b => b.onclick = async () => {
+        const r = res[b.dataset.i];
+        if (mode === "check") {
+          b.disabled = true;
+          try { r.cover = r.cover || (await fn("cover", { isbn: r.isbn })).cover; } catch (e) {}
+          return showCheck(r, owner);
+        }
+        b.disabled = true; b.textContent = "Ajout...";
+        try { r.cover = r.cover || (await fn("cover", { isbn: r.isbn })).cover; } catch (e) {}
+        addManga(Object.assign({ wish: M.wish }, r), b);
+      });
+    } catch (e) { $("#dRes").innerHTML = `<div class="note">${esc(e.message)}</div>`; }
+  };
+  $("#scanBtn").onclick = startScan;
+  $("#dGo").onclick = () => go(false);
+  $("#dq").onkeydown = e => { if (e.key === "Enter") go(false); };
+  openDialog();
+}
+
+// Résultat d'une vérification : l'a-t-il déjà, où en est la série, et quel prix.
+function showCheck(r, owner) {
+  const isMe = owner === state.me;
+  const who = isMe ? "ta collection" : "la collection " + deName(nameOf(owner));
+  const owned = state.mangas.find(m => m.owner === owner && !m.wish && ((r.isbn && m.isbn === r.isbn) ||
+    (r.series && key(m.series) === key(r.series) && r.tome != null && m.tome === r.tome)));
+  const wished = state.mangas.find(m => m.owner === owner && m.wish && r.isbn && m.isbn === r.isbn);
+  const st = r.series ? seriesStatus(owner, r.series) : { count: 0 };
+  let status = owned
+    ? `<div class="note yes"><b>Déjà dans ${esc(who)}.</b></div>`
+    : `<div class="note no"><b>Pas dans ${esc(who)}.</b>${wished ? " Il est dans la wishlist." : ""}</div>`;
+  if (st.count) status += `<div class="meta">${esc(r.series)} : ${plural(st.count, "tome", "tomes")} (${ranges(st.nums) || "sans numéro"})${st.missing.length ? ", il manque " + ranges(st.missing) : ""}.</div>`;
+  else if (r.series && !owned) status += `<div class="meta">Aucun tome de ${esc(r.series)} pour l’instant.</div>`;
+  $("#manual").innerHTML = "";
+  $("#dRes").innerHTML = (r.series ? resLine(r) : `<div class="note">ISBN ${esc(r.isbn || "")} : ${navigator.onLine ? "inconnu du catalogue" : "infos indisponibles hors ligne"}.</div>`)
+    + status + `<div class="pricebox">${priceHtml(r)}</div>
+    <div class="row"><button id="againBtn">Scanner un autre</button><span class="spacer"></span>
+      ${isMe && !owned && r.series && !wished ? '<button id="wishAdd">Wishlist</button>' : ""}
+      ${isMe && !owned && r.series ? '<button id="collAdd" class="primary">Je l’ai acheté</button>' : ""}</div>`;
+  $("#againBtn").onclick = () => $("#scanBtn").click();
+  if ($("#wishAdd")) $("#wishAdd").onclick = e => addManga(Object.assign({}, r, { wish: true }), e.target);
+  if ($("#collAdd")) $("#collAdd").onclick = e => addManga(Object.assign({}, r, { wish: false }), e.target);
+}
+
+function showManualForm(wish, pre) {
+  $("#manual").innerHTML = `
+    <label>Série<input type="text" id="mSeries"></label>
+    <label>Tome<input type="text" id="mTome" inputmode="numeric"></label>
+    <label>Titre du tome (facultatif)<input type="text" id="mTitle"></label>
+    <label>Auteur(s)<input type="text" id="mAuthors"></label>
+    <label>Éditeur<input type="text" id="mPublisher" placeholder="Glénat, Kana, Pika, Ki-oon..."></label>
+    <label>ISBN<input type="text" id="mIsbn" inputmode="numeric" value="${esc(pre.isbn || "")}"></label>
+    <div class="row"><span class="spacer"></span><button id="mAdd" class="primary">Ajouter</button></div>`;
+  $("#mAdd").onclick = e => {
+    const tome = parseInt($("#mTome").value, 10);
+    addManga({ series: $("#mSeries").value.trim(), tome: isNaN(tome) ? null : tome, title: $("#mTitle").value.trim(),
+      authors: $("#mAuthors").value.trim(), publisher: $("#mPublisher").value.trim(),
+      isbn: $("#mIsbn").value.trim() ? isbn13($("#mIsbn").value) : "", cover: pre.cover || null, wish }, e.target);
+  };
+  $("#mSeries").focus();
+}
+
+async function addManga(item, btn) {
+  if (!item.series) { toast("Il faut au moins le nom de la série."); return false; }
+  const label = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Ajout..."; }
+  try {
+    // Déjà dans la wishlist : on le passe simplement dans la collection.
+    const wished = !item.wish && item.isbn && state.mangas.find(m => mine(m) && m.wish && m.isbn === item.isbn);
+    if (wished) {
+      wished.wish = false; wished.added = today();
+      await saveManga(wished);
+    } else {
+      const m = {
+        id: crypto.randomUUID().replace(/-/g, "").slice(0, 10), owner: state.me,
+        isbn: item.isbn || "", series: item.series, tome: item.tome ?? null, title: item.title || "",
+        authors: item.authors || "", publisher: item.publisher || "", year: item.year || "",
+        priceNew: item.priceNew ?? null, wish: !!item.wish, source: item.source || "manuel",
+        added: today(), cover: null, coverSource: null,
+      };
+      const { error } = await db.from("mangas").insert({ id: m.id, owner: m.owner, data: mangaData(m) });
+      if (error) throw new Error(error.message);
+      state.mangas.push(m);
+      if (item.cover) { try { Object.assign(m, await fn("setCover", { mangaId: m.id, url: item.cover })); } catch (e) {} }
+      saveCache();
+    }
+    render();
+    if (btn) btn.textContent = "Ajouté";
+    toast(`« ${fullName(item)} » ajouté ${item.wish ? "à ta wishlist" : "à ta collection"}.`);
+    return true;
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+    toast(e.message); return false;
+  }
+}
+
+// ---------- Fenêtre par-dessus la page ----------
+// Sur iPhone, on bloque la page du dessous pour que seule la fiche défile.
+let lockedScroll = 0;
+function openDialog() {
+  const dlg = $("#dlg");
+  if (!dlg.open) {
+    lockedScroll = window.scrollY;
+    document.body.style.top = -lockedScroll + "px";
+    document.body.classList.add("locked");
+    dlg.showModal();
+  }
+  // Safari place sinon le curseur dans le premier champ texte, ce qui ouvre le clavier.
+  $("#dlgBody").focus({ preventScroll: true });
+  if (document.activeElement && document.activeElement.matches("input, select, textarea")) document.activeElement.blur();
+  dlg.scrollTop = 0;
+}
+$("#dlg").addEventListener("close", () => {
+  document.body.classList.remove("locked");
+  document.body.style.top = "";
+  window.scrollTo(0, lockedScroll);
+  stopScan();
+});
+$("#dlgClose").onclick = () => $("#dlg").close();
+// Toucher la zone sombre autour de la fiche la ferme.
+$("#dlg").addEventListener("click", e => { if (e.target === $("#dlg")) $("#dlg").close(); });
+
+// ---------- Démarrage ----------
+async function start() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("q")) state.q = params.get("q");
+  $("#q").value = state.q;
+  const cache = store.get("cache");
+  const prefs = store.get("prefs") || {};
+  state.tab = prefs.tab || "Collection"; state.sort = prefs.sort || "series"; $("#sort").value = state.sort;
+
+  if (!db) {   // hors ligne, bibliothèque Supabase indisponible : on affiche le cache
+    if (cache) { Object.assign(state, cache); state.viewing = prefs.viewing || cache.me; return showApp(); }
+    document.body.innerHTML = '<div class="login"><h1>Mangatek</h1><div class="meta">Pas de réseau, et rien en mémoire pour l’instant.</div></div>';
+    return;
+  }
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) { $("#loginView").hidden = false; return; }
+  state.me = session.user.id;
+  state.viewing = prefs.viewing || state.me;
+  if (cache && cache.me === state.me) { Object.assign(state, { mangas: cache.mangas, profiles: cache.profiles }); showApp(); }
+  if (navigator.onLine) {
+    try { await loadAll(); } catch (e) { if (!cache) return toast("Chargement impossible : " + e.message); }
+  }
+  if (!state.profiles.some(p => p.id === state.me)) {
+    const name = (prompt("Bienvenue ! Quel est ton prénom ?") || "").trim() || session.user.email.split("@")[0];
+    await db.from("profiles").upsert({ id: state.me, name });
+    state.profiles.push({ id: state.me, name });
+  }
+  if (!state.profiles.some(p => p.id === state.viewing)) state.viewing = state.me;
+  showApp();
+}
+
+function savePrefs() { store.set("prefs", Object.assign(store.get("prefs") || {}, { tab: state.tab, sort: state.sort, viewing: state.viewing })); }
+
+$("#loginForm").onsubmit = async e => {
+  e.preventDefault();
+  const { error } = await db.auth.signInWithPassword({ email: $("#lEmail").value.trim(), password: $("#lPass").value });
+  if (error) return toast("Connexion refusée : vérifie l’e-mail et le mot de passe.");
+  location.reload();
+};
+$("#tabs").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.tab = b.dataset.tab; savePrefs(); render(); window.scrollTo(0, 0);
+};
+$("#viewing").onchange = e => { state.viewing = e.target.value; if (state.tab === "Moi") state.tab = "Collection"; savePrefs(); render(); };
+$("#grid").onclick = e => { const c = e.target.closest(".card"); if (c) openManga(c.dataset.id); };
+$("#q").oninput = e => { state.q = e.target.value; render(); };
+$("#sort").onchange = e => { state.sort = e.target.value; savePrefs(); render(); };
+$("#addBtn").onclick = () => openAdd(state.tab === "Wishlist" ? "wish" : "collection");
+$("#checkBtn").onclick = () => openAdd("check");
+window.addEventListener("online", render);
+window.addEventListener("offline", render);
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+start();
+</script>
+</body>
+</html>
