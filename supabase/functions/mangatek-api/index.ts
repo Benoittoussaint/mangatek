@@ -178,6 +178,20 @@ async function setCover(userId: string, mangaId: string, url: string) {
   return data;
 }
 
+// « Je l'ai acheté » : n'importe quel membre peut faire passer un manga de la wishlist d'un autre
+// (par exemple un parent qui l'offre) dans sa collection. Rien d'autre n'est modifiable ainsi.
+async function markBought(userId: string, mangaId: string) {
+  const { data: row } = await admin.from("mangas").select("owner,data").eq("id", mangaId).single();
+  if (!row) throw new UserError("Manga introuvable.");
+  if (!row.data.wish) throw new UserError("Ce manga est déjà dans la collection.");
+  const { data: buyer } = await admin.from("profiles").select("name").eq("id", userId).single();
+  const data = { ...row.data, wish: false, added: new Date().toISOString().slice(0, 10),
+    boughtBy: row.owner === userId ? null : buyer?.name || null };
+  const { error } = await admin.from("mangas").update({ data }).eq("id", mangaId);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ---------- Point d'entrée ----------
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -191,6 +205,7 @@ Deno.serve(async (req) => {
       case "search": return json(await search(String(b.q || "")));
       case "cover": return json({ cover: await findCover(isbn13(String(b.isbn || ""))) });
       case "setCover": return json(await setCover(user.id, b.mangaId, b.url));
+      case "bought": return json(await markBought(user.id, String(b.mangaId || "")));
       default: return json({ error: "Action inconnue." }, 400);
     }
   } catch (e) {

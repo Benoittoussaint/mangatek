@@ -410,7 +410,7 @@ function openManga(id) {
   const edit = mine(m);
   const img = m.cover ? `<img class="cover" src="${esc(m.cover)}" alt="">` : `<div class="cover ph">Pas de couverture</div>`;
   const st = seriesStatus(m.owner, m.series);
-  const metaBits = [m.publisher, m.year, m.isbn ? "ISBN " + m.isbn : "", "ajouté le " + m.added,
+  const metaBits = [m.publisher, m.year, m.isbn ? "ISBN " + m.isbn : "", "ajouté le " + m.added, m.boughtBy ? "offert par " + m.boughtBy : "",
     edit ? "" : "collection " + deName(nameOf(m.owner))].filter(Boolean).map(esc).join(" · ");
   const val = v => esc(v ?? "");
   $("#dlgBody").innerHTML = `
@@ -434,7 +434,7 @@ function openManga(id) {
     <div class="row">
       ${edit ? '<button id="editBtn">Modifier</button><label class="btn" style="margin:0;font-size:inherit;color:inherit">Photo de la couverture<input type="file" id="photo" accept="image/*" hidden></label>' : ""}
       ${edit && m.isbn && !m.cover ? '<button id="autoCover">Chercher la couverture</button>' : ""}
-      ${edit && m.wish ? '<button id="boughtBtn">Je l’ai acheté</button>' : ""}
+      ${m.wish ? `<button id="boughtBtn" class="primary">${edit ? "Je l’ai acheté" : "Je l’ai acheté pour " + esc(nameOf(m.owner))}</button>` : ""}
       ${edit ? '<button id="delBtn">Supprimer</button>' : ""}
       <span class="spacer"></span>
       <button id="closeBtn" autofocus>Fermer</button>
@@ -473,11 +473,7 @@ function openManga(id) {
       try { await saveManga(m); render(); $("#dlg").close(); toast("Manga mis à jour."); }
       catch (e) { Object.keys(m).forEach(k => delete m[k]); Object.assign(m, before); toast(e.message); }
     };
-    if ($("#boughtBtn")) $("#boughtBtn").onclick = async () => {
-      m.wish = false; m.added = today();
-      try { await saveManga(m); render(); $("#dlg").close(); toast(`« ${fullName(m)} » est passé dans ta collection.`); }
-      catch (e) { m.wish = true; toast(e.message); }
-    };
+
     $("#delBtn").onclick = async () => {
       if (!confirm(`Supprimer « ${fullName(m)} » ${m.wish ? "de ta wishlist" : "de ta collection"} ?`)) return;
       const { error } = await db.from("mangas").delete().eq("id", m.id);
@@ -486,6 +482,16 @@ function openManga(id) {
       saveCache(); render(); $("#dlg").close(); toast("Manga supprimé.");
     };
   }
+  // « Je l'ai acheté » : passe le tome de la wishlist à la collection (y compris celle d'un autre membre).
+  if ($("#boughtBtn")) $("#boughtBtn").onclick = async e => {
+    e.target.disabled = true;
+    try {
+      if (edit) { m.wish = false; m.added = today(); await saveManga(m); }
+      else Object.assign(m, await fn("bought", { mangaId: m.id }));
+      saveCache(); render(); $("#dlg").close();
+      toast(`« ${fullName(m)} » est passé dans ${edit ? "ta collection" : "la collection " + deName(nameOf(m.owner))}.`);
+    } catch (err) { if (edit) m.wish = true; e.target.disabled = false; toast(err.message); }
+  };
   openDialog();
 }
 
