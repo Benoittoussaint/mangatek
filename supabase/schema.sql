@@ -13,6 +13,10 @@ create table if not exists public.mangas (
 );
 create index if not exists mangas_owner_idx on public.mangas (owner);
 alter table public.mangas enable row level security;
+-- Accès par l'application (obligatoire pour les tables créées après le 30 octobre 2026).
+-- Pas d'accès sans connexion (anon) : l'application demande toujours de se connecter.
+grant select, insert, update, delete on public.mangas to authenticated;
+grant select, insert, update, delete on public.mangas to service_role;
 -- Chacun voit la collection de tout le monde...
 create policy "mangas visibles par les membres" on public.mangas
   for select to authenticated using (true);
